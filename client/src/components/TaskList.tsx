@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { Box, Typography, Paper, Skeleton } from '@mui/material';
-import { Task, TaskStatus } from '../types/task.types';
+import { Task, TaskStatus, UpdateTaskDto } from '../types/task.types';
 import { TaskItem } from './TaskItem';
+import { TaskEditDialog } from './TaskEditDialog';
 import { useTaskStore } from '../store/taskStore';
 import { useUpdateTask, useDeleteTask } from '../hooks/useTasks';
 
@@ -39,6 +41,8 @@ export function TaskList({ tasks, isLoading = false }: TaskListProps) {
   const { selectedTaskIds, toggleTaskSelection } = useTaskStore();
   const updateTaskMutation = useUpdateTask();
   const deleteTaskMutation = useDeleteTask();
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   const handleStatusChange = (taskId: string, status: TaskStatus) => {
     updateTaskMutation.mutate({ id: taskId, data: { status } });
@@ -48,6 +52,26 @@ export function TaskList({ tasks, isLoading = false }: TaskListProps) {
     if (window.confirm('Are you sure you want to delete this task?')) {
       deleteTaskMutation.mutate(taskId);
     }
+  };
+
+  const handleEdit = (task: Task) => {
+    setSelectedTask(task);
+    setEditDialogOpen(true);
+  };
+
+  const handleCloseEditDialog = () => {
+    setEditDialogOpen(false);
+    setSelectedTask(null);
+  };
+
+  const handleUpdateTask = async (id: string, data: UpdateTaskDto) => {
+    await updateTaskMutation.mutateAsync({ id, data });
+    handleCloseEditDialog();
+  };
+
+  const handleDeleteTask = async (id: string) => {
+    await deleteTaskMutation.mutateAsync(id);
+    handleCloseEditDialog();
   };
 
   if (isLoading) {
@@ -65,17 +89,29 @@ export function TaskList({ tasks, isLoading = false }: TaskListProps) {
   }
 
   return (
-    <Box>
-      {tasks.map((task) => (
-        <TaskItem
-          key={task.id}
-          task={task}
-          selected={selectedTaskIds.includes(task.id)}
-          onToggleSelect={toggleTaskSelection}
-          onDelete={handleDelete}
-          onStatusChange={handleStatusChange}
-        />
-      ))}
-    </Box>
+    <>
+      <Box>
+        {tasks.map((task) => (
+          <TaskItem
+            key={task.id}
+            task={task}
+            selected={selectedTaskIds.includes(task.id)}
+            onToggleSelect={toggleTaskSelection}
+            onDelete={handleDelete}
+            onStatusChange={handleStatusChange}
+            onEdit={handleEdit}
+          />
+        ))}
+      </Box>
+
+      <TaskEditDialog
+        open={editDialogOpen}
+        task={selectedTask}
+        onClose={handleCloseEditDialog}
+        onSubmit={handleUpdateTask}
+        onDelete={handleDeleteTask}
+        isSubmitting={updateTaskMutation.isPending || deleteTaskMutation.isPending}
+      />
+    </>
   );
 }

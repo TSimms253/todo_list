@@ -1,12 +1,4 @@
-import {
-  Card,
-  CardContent,
-  Typography,
-  Chip,
-  IconButton,
-  Box,
-  Checkbox
-} from '@mui/material';
+import { Card, CardContent, Typography, Chip, IconButton, Box, Checkbox } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import { Task, TaskPriority, TaskStatus } from '../types/task.types';
@@ -18,19 +10,20 @@ interface TaskItemProps {
   onToggleSelect: (taskId: string) => void;
   onDelete: (taskId: string) => void;
   onStatusChange: (taskId: string, status: TaskStatus) => void;
+  onEdit: (task: Task) => void;
 }
 
 const priorityColors: Record<TaskPriority, 'error' | 'warning' | 'info' | 'default'> = {
   [TaskPriority.URGENT]: 'error',
   [TaskPriority.HIGH]: 'warning',
   [TaskPriority.MEDIUM]: 'info',
-  [TaskPriority.LOW]: 'default'
+  [TaskPriority.LOW]: 'default',
 };
 
 const statusColors: Record<TaskStatus, 'success' | 'primary' | 'default'> = {
   [TaskStatus.COMPLETED]: 'success',
   [TaskStatus.IN_PROGRESS]: 'primary',
-  [TaskStatus.TODO]: 'default'
+  [TaskStatus.TODO]: 'default',
 };
 
 /**
@@ -42,15 +35,16 @@ export function TaskItem({
   selected,
   onToggleSelect,
   onDelete,
-  onStatusChange
+  onStatusChange,
+  onEdit,
 }: TaskItemProps) {
   const handleStatusClick = () => {
     const nextStatus =
       task.status === TaskStatus.TODO
         ? TaskStatus.IN_PROGRESS
         : task.status === TaskStatus.IN_PROGRESS
-        ? TaskStatus.COMPLETED
-        : TaskStatus.TODO;
+          ? TaskStatus.COMPLETED
+          : TaskStatus.TODO;
 
     onStatusChange(task.id, nextStatus);
   };
@@ -69,7 +63,7 @@ export function TaskItem({
       sx={{
         mb: 2,
         opacity: task.status === TaskStatus.COMPLETED ? 0.7 : 1,
-        transition: 'all 0.3s ease'
+        transition: 'all 0.3s ease',
       }}
     >
       <CardContent>
@@ -78,6 +72,10 @@ export function TaskItem({
             checked={selected}
             onChange={() => onToggleSelect(task.id)}
             sx={{ mt: -1 }}
+            inputProps={{
+              'aria-label': `select ${task.title}`,
+              'data-testid': `task-checkbox-${task.title}`,
+            }}
           />
 
           <Box flex={1}>
@@ -85,17 +83,12 @@ export function TaskItem({
               <Typography
                 variant="h6"
                 sx={{
-                  textDecoration:
-                    task.status === TaskStatus.COMPLETED ? 'line-through' : 'none'
+                  textDecoration: task.status === TaskStatus.COMPLETED ? 'line-through' : 'none',
                 }}
               >
                 {task.title}
               </Typography>
-              <Chip
-                label={task.priority}
-                color={priorityColors[task.priority]}
-                size="small"
-              />
+              <Chip label={task.priority} color={priorityColors[task.priority]} size="small" />
               <Chip
                 label={task.status.replace('_', ' ')}
                 color={statusColors[task.status]}
@@ -133,9 +126,18 @@ export function TaskItem({
           <Box display="flex" gap={1}>
             <IconButton
               size="small"
+              color="primary"
+              onClick={() => onEdit(task)}
+              aria-label="edit task"
+            >
+              <EditIcon />
+            </IconButton>
+            <IconButton
+              size="small"
               color="error"
               onClick={() => onDelete(task.id)}
               aria-label="delete task"
+              data-testid={`delete-task-button-${task.title}`}
             >
               <DeleteIcon />
             </IconButton>

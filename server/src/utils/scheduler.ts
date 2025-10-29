@@ -38,6 +38,193 @@ function calculateTaskScore(task: Task, now: Date): number {
 }
 
 /**
+ * Checks if scheduling a task at the given time would cause it to miss its due date
+ */
+function wouldMissDueDate(task: Task, scheduledEndTime: Date): boolean {
+  if (!task.dueDate) return false;
+  return scheduledEndTime > new Date(task.dueDate);
+}
+
+/**
+ * Determines if a task is deadline-critical
+ * A task is deadline-critical if:
+ * - It's Medium or High priority (NOT Low)
+ * - It would miss its deadline at the scheduled time
+ */
+function isDeadlineCritical(task: Task, scheduledEndTime: Date): boolean {
+  // Low priority tasks are never deadline-critical
+  if (task.priority === TaskPriority.LOW) return false;
+
+  // Medium and High priority tasks are deadline-critical if they'd miss their deadline
+  if (task.priority === TaskPriority.MEDIUM || task.priority === TaskPriority.HIGH) {
+    return wouldMissDueDate(task, scheduledEndTime);
+  }
+
+  // Urgent tasks use standard priority logic
+  return false;
+}
+
+/**
+ * Calculates how many working minutes are available between two dates
+ */
+function calculateAvailableWorkingMinutes(
+  fromDate: Date,
+  toDate: Date,
+  workingHoursStart: number,
+  workingHoursEnd: number
+): number {
+  const workingHoursPerDay = workingHoursEnd - workingHoursStart;
+  const millisecondsPerDay = 1000 * 60 * 60 * 24;
+
+  const timeDiff = toDate.getTime() - fromDate.getTime();
+  const daysAvailable = timeDiff / millisecondsPerDay;
+
+  // Convert to working minutes
+  return Math.floor(daysAvailable * workingHoursPerDay * 60);
+}
+
+/**
+ * Checks if a task can be safely pushed back without missing its due date
+ */
+function canBeSafelyPushed(
+  task: Task,
+  currentScheduledEnd: Date,
+  duration: number,
+  workingHoursStart: number,
+  workingHoursEnd: number
+): boolean {
+  if (!task.dueDate) return true; // No due date means it can always be pushed
+
+  const dueDate = new Date(task.dueDate);
+
+  // If already past due date, cannot be safely pushed
+  if (currentScheduledEnd >= dueDate) return false;
+
+  // Calculate working minutes available between current end and due date
+  const availableMinutes = calculateAvailableWorkingMinutes(
+    currentScheduledEnd,
+    dueDate,
+    workingHoursStart,
+    workingHoursEnd
+  );
+
+  // Can be pushed if there's at least the task duration available
+  return availableMinutes >= duration;
+}
+
+/**
+ * Checks if a task can complete before its due time if started at the proposed time
+ */
+function canCompleteBeforeDueTime(
+  proposedStartTime: Date,
+  duration: number,
+  dueDate: Date,
+  workingHoursStart: number,
+  workingHoursEnd: number
+): boolean {
+  const proposedEndTime = new Date(proposedStartTime.getTime() + duration * 60000);
+
+  // Simple check: would the task end before its due date/time?
+  return proposedEndTime <= dueDate;
+}
+
+/**
+ * When both tasks are deadline-critical, determines which should be scheduled first
+ * based on their due times. Returns true if currentTask should take priority over conflictingTask.
+ */
+function shouldPrioritizeByDueTime(
+  currentTask: Task,
+  currentScheduledStart: Date,
+  currentScheduledEnd: Date,
+  conflictingTask: Task,
+  conflictingScheduledStart: Date,
+  conflictingScheduledEnd: Date,
+  workingHoursStart: number,
+  workingHoursEnd: number
+): boolean {
+  if (!currentTask.dueDate || !conflictingTask.dueDate) return false;
+
+  const currentDueDate = new Date(currentTask.dueDate);
+  const conflictingDueDate = new Date(conflictingTask.dueDate);
+  const currentDuration = currentTask.estimatedDuration || 60;
+  const conflictingDuration = conflictingTask.estimatedDuration || 60;
+
+  // If current task is due earlier, check if we can swap them
+  if (currentDueDate < conflictingDueDate) {
+    // Current task is due first - check if both can complete if we bump the conflicting task
+
+    // Can current task complete at its proposed time?
+    const currentCanComplete = canCompleteBeforeDueTime(
+      currentScheduledStart,
+      currentDuration,
+      currentDueDate,
+      workingHoursStart,
+      workingHoursEnd
+    );
+
+    if (!currentCanComplete) {
+      // Current task can't complete at this time, so it should take priority
+      return true;
+    }
+
+    // Can conflicting task complete if pushed to after current task?
+    const newConflictingStart = new Date(currentScheduledEnd);
+    const conflictingCanCompleteAfter = canCompleteBeforeDueTime(
+      newConflictingStart,
+      conflictingDuration,
+      conflictingDueDate,
+      workingHoursStart,
+      workingHoursEnd
+    );
+
+    // If both can complete with current first, prioritize current (earlier due time)
+    if (conflictingCanCompleteAfter) {
+      return true;
+    }
+  } else {
+    // Conflicting task is due first - check if it should keep its spot
+
+    // Can conflicting task complete at its current time?
+    const conflictingCanComplete = canCompleteBeforeDueTime(
+      conflictingScheduledStart,
+      conflictingDuration,
+      conflictingDueDate,
+      workingHoursStart,
+      workingHoursEnd
+    );
+
+    // Can current task complete if pushed to after conflicting task?
+    const newCurrentStart = new Date(conflictingScheduledEnd);
+    const currentCanCompleteAfter = canCompleteBeforeDueTime(
+      newCurrentStart,
+      currentDuration,
+      currentDueDate,
+      workingHoursStart,
+      workingHoursEnd
+    );
+
+    // If both can complete with conflicting first, don't bump it
+    if (conflictingCanComplete && currentCanCompleteAfter) {
+      return false;
+    }
+
+    // If conflicting can't complete but current can if it goes first, bump it
+    if (!conflictingCanComplete) {
+      const currentWouldComplete = canCompleteBeforeDueTime(
+        currentScheduledStart,
+        currentDuration,
+        currentDueDate,
+        workingHoursStart,
+        workingHoursEnd
+      );
+      return currentWouldComplete;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Represents a time slot with a scheduled task
  */
 interface TimeSlot {
@@ -125,8 +312,14 @@ export function scheduleTasks(
   request: ScheduleRequest
 ): ScheduledTask[] {
   const now = new Date();
+
+  // Normalize start date to beginning of the day
   const startDate = new Date(request.startDate);
+  startDate.setHours(0, 0, 0, 0);
+
+  // Normalize end date to end of the day
   const endDate = new Date(request.endDate);
+  endDate.setHours(23, 59, 59, 999);
 
   // Get tasks to schedule
   const tasksToSchedule = tasks.filter(task => request.taskIds.includes(task.id));
@@ -165,39 +358,231 @@ export function scheduleTasks(
   for (const { task, score } of sortedTasksToSchedule) {
     const duration = task.estimatedDuration || 60; // Default 60 minutes
 
-    // Find next available slot
-    const availableTime = findNextAvailableSlot(
-      startDate,
-      duration,
-      timeSlots,
-      request.workingHoursStart,
-      request.workingHoursEnd,
-      endDate
-    );
+    // For Medium/High priority tasks with due dates, check if they should try for early slot
+    let shouldTryEarlySlot = false;
+    if ((task.priority === TaskPriority.MEDIUM || task.priority === TaskPriority.HIGH) && task.dueDate) {
+      const earliestStart = new Date(startDate);
+      earliestStart.setHours(request.workingHoursStart, 0, 0, 0);
+      const earliestEnd = new Date(earliestStart.getTime() + duration * 60000);
 
-    if (!availableTime) {
-      continue; // Skip if no slot available
+      // Check if earliest slot is already occupied
+      const hasEarlyConflicts = timeSlots.some(slot =>
+        timeSlotsOverlap(earliestStart, earliestEnd, slot.startTime, slot.endTime)
+      );
+
+      if (hasEarlyConflicts) {
+        // Check if this task is due today or very soon
+        const taskDueDate = new Date(task.dueDate);
+        const daysUntilDue = (taskDueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+
+        // If due within 1 day (today or tomorrow), try for early slot
+        if (daysUntilDue < 1) {
+          shouldTryEarlySlot = true;
+        } else {
+          // For tasks due later, check if next available slot would make it deadline-critical
+          const nextAvailableSlot = findNextAvailableSlot(
+            startDate,
+            duration,
+            timeSlots,
+            request.workingHoursStart,
+            request.workingHoursEnd,
+            endDate
+          );
+
+          if (nextAvailableSlot) {
+            const nextAvailableEnd = new Date(nextAvailableSlot.getTime() + duration * 60000);
+            shouldTryEarlySlot = isDeadlineCritical(task, nextAvailableEnd);
+          }
+        }
+      }
     }
 
-    const scheduledStartTime = availableTime;
-    const scheduledEndTime = new Date(availableTime.getTime() + duration * 60000);
+    let scheduledStartTime: Date;
+    let scheduledEndTime: Date;
+    let conflictingSlots: TimeSlot[] = [];
 
-    // Check if this higher priority task should bump any lower priority tasks
-    const conflictingSlots = timeSlots.filter(slot =>
-      timeSlotsOverlap(scheduledStartTime, scheduledEndTime, slot.startTime, slot.endTime)
-    );
+    if (shouldTryEarlySlot) {
+      // Try to schedule at the earliest possible time
+      const earliestStart = new Date(startDate);
+      earliestStart.setHours(request.workingHoursStart, 0, 0, 0);
+      const earliestEnd = new Date(earliestStart.getTime() + duration * 60000);
 
-    const lowerPriorityConflicts = conflictingSlots.filter(slot => slot.score < score);
+      scheduledStartTime = earliestStart;
+      scheduledEndTime = earliestEnd;
 
-    if (lowerPriorityConflicts.length > 0) {
-      // Remove lower priority tasks from time slots and mark for rescheduling
-      lowerPriorityConflicts.forEach(slot => {
-        const index = timeSlots.indexOf(slot);
-        if (index > -1) {
-          timeSlots.splice(index, 1);
-          tasksToReschedule.push(slot.task);
+      // Find all conflicts at this early slot
+      conflictingSlots = timeSlots.filter(slot =>
+        timeSlotsOverlap(scheduledStartTime, scheduledEndTime, slot.startTime, slot.endTime)
+      );
+    } else {
+      // Use standard next available slot logic
+      const availableTime = findNextAvailableSlot(
+        startDate,
+        duration,
+        timeSlots,
+        request.workingHoursStart,
+        request.workingHoursEnd,
+        endDate
+      );
+
+      if (!availableTime) {
+        continue; // Skip if no slot available
+      }
+
+      scheduledStartTime = availableTime;
+      scheduledEndTime = new Date(availableTime.getTime() + duration * 60000);
+
+      // Check for any conflicts (should be none from findNextAvailableSlot)
+      conflictingSlots = timeSlots.filter(slot =>
+        timeSlotsOverlap(scheduledStartTime, scheduledEndTime, slot.startTime, slot.endTime)
+      );
+    }
+
+    // Check if this task is deadline-critical at the scheduled time
+    const thisTaskIsDeadlineCritical = isDeadlineCritical(task, scheduledEndTime);
+
+    if (conflictingSlots.length > 0) {
+      const tasksToBump: TimeSlot[] = [];
+
+      // If this task is deadline-critical, it can bump even higher priority tasks
+      if (thisTaskIsDeadlineCritical) {
+        // Check ALL conflicting tasks (including higher priority ones)
+        for (const slot of conflictingSlots) {
+          const conflictingTaskDuration = slot.task.estimatedDuration || 60;
+          const conflictingTaskIsDeadlineCritical = isDeadlineCritical(slot.task, slot.endTime);
+
+          // Both tasks are deadline-critical - use due time comparison
+          if (conflictingTaskIsDeadlineCritical) {
+            // Determine priority based on due times and whether both can complete
+            const shouldBump = shouldPrioritizeByDueTime(
+              task,
+              scheduledStartTime,
+              scheduledEndTime,
+              slot.task,
+              slot.startTime,
+              slot.endTime,
+              request.workingHoursStart,
+              request.workingHoursEnd
+            );
+
+            if (shouldBump) {
+              tasksToBump.push(slot);
+            }
+            continue;
+          }
+
+          // Check if the conflicting task can be safely pushed
+          const canPush = canBeSafelyPushed(
+            slot.task,
+            slot.endTime,
+            conflictingTaskDuration,
+            request.workingHoursStart,
+            request.workingHoursEnd
+          );
+
+          // Bump the task if it can be safely rescheduled
+          if (canPush) {
+            tasksToBump.push(slot);
+          }
         }
+      } else {
+        // For tasks due today, use due time comparison even if not deadline-critical
+        if (task.dueDate && shouldTryEarlySlot) {
+          const taskDueDate = new Date(task.dueDate);
+          const daysUntilDue = (taskDueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+
+          // If task is due within 1 day, check due times against conflicting tasks
+          if (daysUntilDue < 1) {
+            for (const slot of conflictingSlots) {
+              if (slot.task.dueDate) {
+                const conflictingDueDate = new Date(slot.task.dueDate);
+                const conflictingDuration = slot.task.estimatedDuration || 60;
+
+                // If current task is due earlier in the day
+                if (taskDueDate < conflictingDueDate) {
+                  // Check if both can complete if we swap them
+                  const conflictingCanCompleteAfter = canCompleteBeforeDueTime(
+                    scheduledEndTime,
+                    conflictingDuration,
+                    conflictingDueDate,
+                    request.workingHoursStart,
+                    request.workingHoursEnd
+                  );
+
+                  // Check if conflicting task can be safely pushed
+                  const canPush = canBeSafelyPushed(
+                    slot.task,
+                    slot.endTime,
+                    conflictingDuration,
+                    request.workingHoursStart,
+                    request.workingHoursEnd
+                  );
+
+                  if (conflictingCanCompleteAfter && canPush) {
+                    tasksToBump.push(slot);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Standard priority-based scheduling (for non-deadline-critical tasks)
+        const lowerPriorityConflicts = conflictingSlots.filter(slot => slot.score < score);
+
+        for (const slot of lowerPriorityConflicts) {
+          const conflictingTaskDuration = slot.task.estimatedDuration || 60;
+          const conflictingTaskIsDeadlineCritical = isDeadlineCritical(slot.task, slot.endTime);
+
+          // Never bump a deadline-critical task with a non-deadline-critical task
+          if (conflictingTaskIsDeadlineCritical) {
+            continue;
+          }
+
+          // Don't bump if already marked for bumping by due time logic
+          if (tasksToBump.includes(slot)) {
+            continue;
+          }
+
+          // Standard bumping logic
+          tasksToBump.push(slot);
+        }
+      }
+
+      // Remove tasks that should be bumped from time slots and scheduled tasks, mark for rescheduling
+      tasksToBump.forEach(slot => {
+        const timeSlotIndex = timeSlots.indexOf(slot);
+        if (timeSlotIndex > -1) {
+          timeSlots.splice(timeSlotIndex, 1);
+        }
+
+        // Also remove from scheduledTasks if it was already added
+        const scheduledTaskIndex = scheduledTasks.findIndex(t => t.id === slot.task.id);
+        if (scheduledTaskIndex > -1) {
+          scheduledTasks.splice(scheduledTaskIndex, 1);
+        }
+
+        tasksToReschedule.push(slot.task);
       });
+
+      // If we tried early slot but couldn't bump anything, find next available slot
+      if (shouldTryEarlySlot && tasksToBump.length === 0) {
+        const availableTime = findNextAvailableSlot(
+          startDate,
+          duration,
+          timeSlots,
+          request.workingHoursStart,
+          request.workingHoursEnd,
+          endDate
+        );
+
+        if (!availableTime) {
+          continue; // Skip if no slot available
+        }
+
+        scheduledStartTime = availableTime;
+        scheduledEndTime = new Date(availableTime.getTime() + duration * 60000);
+      }
     }
 
     // Add this task to scheduled tasks
