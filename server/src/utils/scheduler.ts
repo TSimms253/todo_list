@@ -438,8 +438,26 @@ export function scheduleTasks(
       );
     }
 
-    // Check if this task is deadline-critical at the scheduled time
-    const thisTaskIsDeadlineCritical = isDeadlineCritical(task, scheduledEndTime);
+    // Check if this task is deadline-critical
+    // If we tried for early slot due to deadline, check if next available would make us critical
+    let thisTaskIsDeadlineCritical = isDeadlineCritical(task, scheduledEndTime);
+
+    if (shouldTryEarlySlot && conflictingSlots.length > 0 && !thisTaskIsDeadlineCritical) {
+      // We're trying early slot but not deadline-critical at this slot
+      // Check if we'd be deadline-critical at the next available slot
+      const nextAvailable = findNextAvailableSlot(
+        startDate,
+        duration,
+        timeSlots,
+        request.workingHoursStart,
+        request.workingHoursEnd,
+        endDate
+      );
+      if (nextAvailable) {
+        const nextAvailableEnd = new Date(nextAvailable.getTime() + duration * 60000);
+        thisTaskIsDeadlineCritical = isDeadlineCritical(task, nextAvailableEnd);
+      }
+    }
 
     if (conflictingSlots.length > 0) {
       const tasksToBump: TimeSlot[] = [];
