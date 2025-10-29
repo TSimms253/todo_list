@@ -48,14 +48,8 @@ jobs:
       # Run end-to-end tests (disable webServer, run servers manually)
       - name: Run E2E tests
         run: |
-          cd server && npm run dev &
-          SERVER_PID=$!
-          cd ../client && npm run dev &
-          CLIENT_PID=$!
-          cd ..
-          npx wait-on http://localhost:5000 http://localhost:3000 --timeout 120000 -v
-          npx playwright test
-          kill $SERVER_PID $CLIENT_PID || true
+          npm install -g start-server-and-test # Install if not already available
+          start-server-and-test "cd server && npm run dev" http://localhost:5000 "cd client && npm run dev" http://localhost:3000 "npx playwright test"
         env:
           CI: true
           VITE_TEST_MODE: "true"
