@@ -61,7 +61,6 @@ export function ScheduleAssistant({ open, onClose }: ScheduleAssistantProps) {
   });
 
   const startDate = watch('startDate');
-  const endDate = watch('endDate');
 
   const onSubmit = async (data: ScheduleFormData) => {
     if (!data.startDate || !data.endDate) {
