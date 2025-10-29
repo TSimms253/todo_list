@@ -41,18 +41,18 @@ export default defineConfig({
     },
   ],
 
-  /* Run your local dev server before starting the tests */
-  webServer: [
+  /* Run your local dev server before starting the tests (disabled in CI) */
+  webServer: process.env.CI ? undefined : [
     {
       command: 'cd server && npm run dev',
       url: 'http://localhost:5000',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: true,
       timeout: 120000,
     },
     {
       command: 'cd client && npm run dev',
       url: 'http://localhost:3000',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: true,
       timeout: 120000,
     },
   ],

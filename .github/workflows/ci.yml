@@ -45,9 +45,13 @@ jobs:
       - name: Run unit tests with coverage
         run: npm run test:coverage
 
-      # Run end-to-end tests (webServer will auto-start client and server)
+      # Run end-to-end tests (disable webServer, run servers manually)
       - name: Run E2E tests
-        run: npx playwright test
+        run: |
+          cd server && npm run dev > /dev/null 2>&1 &
+          cd client && npm run dev > /dev/null 2>&1 &
+          npx wait-on http://localhost:5000 http://localhost:3000 --timeout 60000
+          npx playwright test
         env:
           CI: true
 
