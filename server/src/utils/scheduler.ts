@@ -259,20 +259,20 @@ function findNextAvailableSlot(
 ): Date | null {
   let currentTime = new Date(startTime);
 
-  // Ensure we start at or after working hours
-  if (currentTime.getHours() < workingHoursStart) {
-    currentTime.setHours(workingHoursStart, 0, 0, 0);
+  // Ensure we start at or after working hours (using UTC to match ISO date strings)
+  if (currentTime.getUTCHours() < workingHoursStart) {
+    currentTime.setUTCHours(workingHoursStart, 0, 0, 0);
   }
 
   while (currentTime <= endDate) {
     const proposedEndTime = new Date(currentTime.getTime() + duration * 60000);
-    const endHour = proposedEndTime.getHours() + proposedEndTime.getMinutes() / 60;
+    const endHour = proposedEndTime.getUTCHours() + proposedEndTime.getUTCMinutes() / 60;
 
     // Check if we exceed working hours
     if (endHour > workingHoursEnd) {
       // Move to next day
-      currentTime.setDate(currentTime.getDate() + 1);
-      currentTime.setHours(workingHoursStart, 0, 0, 0);
+      currentTime.setUTCDate(currentTime.getUTCDate() + 1);
+      currentTime.setUTCHours(workingHoursStart, 0, 0, 0);
       continue;
     }
 
@@ -313,13 +313,13 @@ export function scheduleTasks(
 ): ScheduledTask[] {
   const now = new Date();
 
-  // Normalize start date to beginning of the day
+  // Normalize start date to beginning of the day (using UTC to match ISO date strings)
   const startDate = new Date(request.startDate);
-  startDate.setHours(0, 0, 0, 0);
+  startDate.setUTCHours(0, 0, 0, 0);
 
-  // Normalize end date to end of the day
+  // Normalize end date to end of the day (using UTC to match ISO date strings)
   const endDate = new Date(request.endDate);
-  endDate.setHours(23, 59, 59, 999);
+  endDate.setUTCHours(23, 59, 59, 999);
 
   // Get tasks to schedule
   const tasksToSchedule = tasks.filter(task => request.taskIds.includes(task.id));
@@ -362,7 +362,7 @@ export function scheduleTasks(
     let shouldTryEarlySlot = false;
     if ((task.priority === TaskPriority.MEDIUM || task.priority === TaskPriority.HIGH) && task.dueDate) {
       const earliestStart = new Date(startDate);
-      earliestStart.setHours(request.workingHoursStart, 0, 0, 0);
+      earliestStart.setUTCHours(request.workingHoursStart, 0, 0, 0);
       const earliestEnd = new Date(earliestStart.getTime() + duration * 60000);
 
       // Check if earliest slot is already occupied
@@ -404,7 +404,7 @@ export function scheduleTasks(
     if (shouldTryEarlySlot) {
       // Try to schedule at the earliest possible time
       const earliestStart = new Date(startDate);
-      earliestStart.setHours(request.workingHoursStart, 0, 0, 0);
+      earliestStart.setUTCHours(request.workingHoursStart, 0, 0, 0);
       const earliestEnd = new Date(earliestStart.getTime() + duration * 60000);
 
       scheduledStartTime = earliestStart;
