@@ -18,7 +18,7 @@ import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { renderTimeViewClock } from '@mui/x-date-pickers/timeViewRenderers';
-import { setHours, setMinutes, parseISO } from 'date-fns';
+import { setHours, setMinutes, setSeconds, parseISO } from 'date-fns';
 import { Task, UpdateTaskDto, TaskPriority, TaskStatus } from '../types/task.types';
 import { sanitizeText } from '../utils/sanitize';
 
@@ -115,8 +115,11 @@ export function TaskEditDialog({
           data.dueTime.getHours()
         );
       } else {
-        // If no time selected, use the date as-is
-        combinedDueDate = data.dueDate;
+        // If no time selected, default to end of day (23:59:59)
+        combinedDueDate = setHours(
+          setMinutes(setSeconds(data.dueDate, 59), 59),
+          23
+        );
       }
     }
 

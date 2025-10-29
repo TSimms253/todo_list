@@ -45,8 +45,16 @@ export function ScheduleAssistant({ open, onClose }: ScheduleAssistantProps) {
     watch
   } = useForm<ScheduleFormData>({
     defaultValues: {
-      startDate: new Date(),
-      endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+      startDate: (() => {
+        const date = new Date();
+        date.setHours(0, 0, 0, 0);
+        return date;
+      })(),
+      endDate: (() => {
+        const date = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        date.setHours(23, 59, 59, 999);
+        return date;
+      })(),
       workingHoursStart: 9,
       workingHoursEnd: 17
     }

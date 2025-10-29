@@ -17,7 +17,7 @@ import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { renderTimeViewClock } from '@mui/x-date-pickers/timeViewRenderers';
-import { setHours, setMinutes } from 'date-fns';
+import { setHours, setMinutes, setSeconds } from 'date-fns';
 import { CreateTaskDto, TaskPriority } from '../types/task.types';
 import { sanitizeText } from '../utils/sanitize';
 
@@ -48,6 +48,7 @@ export function TaskForm({ open, onClose, onSubmit, isSubmitting = false }: Task
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors }
   } = useForm<FormData>({
     defaultValues: {
@@ -59,6 +60,12 @@ export function TaskForm({ open, onClose, onSubmit, isSubmitting = false }: Task
       estimatedDuration: ''
     }
   });
+
+  // Expose form methods to window object only in test environment
+  // This allows e2e tests to programmatically set form values
+  if (import.meta.env.MODE === 'test' || import.meta.env.VITE_TEST_MODE === 'true') {
+    (window as any).formMethods = { setValue, watch, reset };
+  }
 
   const dueDate = watch('dueDate');
 
@@ -73,8 +80,11 @@ export function TaskForm({ open, onClose, onSubmit, isSubmitting = false }: Task
           data.dueTime.getHours()
         );
       } else {
-        // If no time selected, use the date as-is
-        combinedDueDate = data.dueDate;
+        // If no time selected, default to end of day (23:59:59)
+        combinedDueDate = setHours(
+          setMinutes(setSeconds(data.dueDate, 59), 59),
+          23
+        );
       }
     }
 
@@ -114,12 +124,14 @@ export function TaskForm({ open, onClose, onSubmit, isSubmitting = false }: Task
             render={({ field }) => (
               <TextField
                 {...field}
+                name="title"
                 label="Title"
                 fullWidth
                 margin="normal"
                 error={!!errors.title}
                 helperText={errors.title?.message}
                 autoFocus
+                data-testid="task-title-input"
               />
             )}
           />
@@ -152,8 +164,13 @@ export function TaskForm({ open, onClose, onSubmit, isSubmitting = false }: Task
             control={control}
             render={({ field }) => (
               <FormControl fullWidth margin="normal">
-                <InputLabel>Priority</InputLabel>
-                <Select {...field} label="Priority">
+                <InputLabel id="priority-label">Priority</InputLabel>
+                <Select
+                  {...field}
+                  label="Priority"
+                  labelId="priority-label"
+                  data-testid="task-priority-select"
+                >
                   <MenuItem value={TaskPriority.LOW}>Low</MenuItem>
                   <MenuItem value={TaskPriority.MEDIUM}>Medium</MenuItem>
                   <MenuItem value={TaskPriority.HIGH}>High</MenuItem>
@@ -173,11 +190,14 @@ export function TaskForm({ open, onClose, onSubmit, isSubmitting = false }: Task
                   label="Due Date (Optional)"
                   slotProps={{
                     textField: {
+                      id: 'my-date-picker',
                       placeholder: '',
                       fullWidth: true,
-                      margin: 'normal'
-                    }
+                      margin: 'normal',
+                      inputProps: { 'data-testid': 'due-date-input' }
+                    },
                   }}
+                  onChange={(date) => field.onChange(date)}
                 />
               )}
             />
@@ -196,12 +216,18 @@ export function TaskForm({ open, onClose, onSubmit, isSubmitting = false }: Task
                   }}
                   slotProps={{
                     textField: {
+                      id: 'my-time-picker',
                       placeholder: '',
                       fullWidth: true,
                       margin: 'normal',
-                      helperText: !dueDate ? 'Select a date first' : ''
-                    }
+                      helperText: !dueDate ? 'Select a date first' : '',
+                      inputProps: {
+                        'data-testid': 'due-time-input'
+                      },
+                    },
                   }}
+                  ampm
+                  onChange={(time) => field.onChange(time)}
                 />
               )}
             />
@@ -223,12 +249,15 @@ export function TaskForm({ open, onClose, onSubmit, isSubmitting = false }: Task
             render={({ field }) => (
               <TextField
                 {...field}
+                name="estimatedDuration"
                 label="Estimated Duration (minutes)"
                 type="number"
                 fullWidth
                 margin="normal"
                 error={!!errors.estimatedDuration}
                 helperText={errors.estimatedDuration?.message}
+                data-testid="task-duration-input"
+                inputProps={{ 'data-testid': 'task-duration-input-field' }}
               />
             )}
           />
@@ -238,7 +267,12 @@ export function TaskForm({ open, onClose, onSubmit, isSubmitting = false }: Task
           <Button onClick={handleClose} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button type="submit" variant="contained" disabled={isSubmitting}>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={isSubmitting}
+            data-testid="create-task-submit-button"
+          >
             Create Task
           </Button>
         </DialogActions>

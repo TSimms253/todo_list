@@ -59,6 +59,7 @@ function AppContent() {
             color="inherit"
             startIcon={<CalendarMonthIcon />}
             onClick={() => setShowCalendar(!showCalendar)}
+            data-testid="toggle-calendar-button"
           >
             {showCalendar ? 'Show Tasks' : 'Show Calendar'}
           </Button>
@@ -84,6 +85,7 @@ function AppContent() {
               <Button
                 variant="contained"
                 onClick={() => setScheduleAssistantOpen(true)}
+                data-testid="schedule-assistant-button"
               >
                 Schedule Selected
               </Button>
@@ -105,6 +107,7 @@ function AppContent() {
           <Fab
             color="primary"
             aria-label="add task"
+            data-testid="add-task-button"
             sx={{ position: 'fixed', bottom: 24, right: 24 }}
             onClick={() => setTaskFormOpen(true)}
           >

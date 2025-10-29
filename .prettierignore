@@ -1,0 +1,31 @@
+# Dependencies
+node_modules
+package-lock.json
+server/node_modules
+client/node_modules
+
+# Build outputs
+dist
+build
+.next
+out
+client/dist
+server/dist
+
+# Test outputs
+coverage
+.nyc_output
+test-results
+playwright-report
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+
+# IDE
+.idea
+.vscode
