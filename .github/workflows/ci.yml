@@ -45,10 +45,9 @@ jobs:
       - name: Run unit tests with coverage
         run: npm run test:coverage
 
-      # Run end-to-end tests (disable webServer, run servers manually)
+      # Run end-to-end tests
       - name: Run E2E tests
-        run: |
-          run: npm run test:e2e
+        run: npm run test:e2e:ci
         env:
           CI: true
           VITE_TEST_MODE: "true"

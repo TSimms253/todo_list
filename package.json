@@ -15,6 +15,7 @@
     "test:coverage": "cd server && npm run test:coverage",
     "test:e2e": "echo 'Start servers with npm run dev first, then run npm run test:e2e:local'",
     "test:e2e:local": "cross-env NODE_ENV=test playwright test --config=playwright.config.local.ts",
+    "test:e2e:ci": "(cd server && npm run dev) & (cd client && npm run dev) & npx wait-on http://localhost:5000 http://localhost:3000 --timeout 120000 && npx playwright test",
     "test:e2e:ui": "echo 'Start servers with npm run dev first, then run npm run test:e2e:ui:local'",
     "test:e2e:ui:local": "playwright test --config=playwright.config.local.ts --ui",
     "test:e2e:headed": "playwright test --config=playwright.config.local.ts --headed",
