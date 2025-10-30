@@ -31,6 +31,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@codecov/vite-plugin": "^1.9.1",
     "@playwright/test": "^1.40.1",
     "@types/node": "^20.10.6",
     "concurrently": "^8.2.2",
