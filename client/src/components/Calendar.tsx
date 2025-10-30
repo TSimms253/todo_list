@@ -194,7 +194,7 @@ export function Calendar({ tasks }: CalendarProps) {
 
       {viewType === 'week' && (
         <Box display="grid" gridTemplateColumns="repeat(7, 1fr)" gap={1}>
-          {(dateRange as Date[]).map(renderDayCell)}
+          {(dateRange as Date[]).map((day) => renderDayCell(day, true))}
         </Box>
       )}
 

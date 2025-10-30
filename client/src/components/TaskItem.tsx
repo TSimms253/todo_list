@@ -75,7 +75,7 @@ export function TaskItem({
             inputProps={{
               'aria-label': `select ${task.title}`,
               'data-testid': `task-checkbox-${task.title}`,
-            }}
+            } as React.InputHTMLAttributes<HTMLInputElement>}
           />
 
           <Box flex={1}>

@@ -24,7 +24,14 @@ export default defineConfig({
   },
 
   /* Configure projects for major browsers */
-  projects: [
+  projects: process.env.CI ? [
+    // CI: Only run Chromium for speed and cost efficiency
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ] : [
+    // Local: Run all browsers
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
@@ -41,18 +48,18 @@ export default defineConfig({
     },
   ],
 
-  /* Run your local dev server before starting the tests */
-  webServer: [
+  /* Run your local dev server before starting the tests (disabled in CI) */
+  webServer: process.env.CI ? undefined : [
     {
       command: 'cd server && npm run dev',
       url: 'http://localhost:5000',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: true,
       timeout: 120000,
     },
     {
       command: 'cd client && npm run dev',
       url: 'http://localhost:3000',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: true,
       timeout: 120000,
     },
   ],
